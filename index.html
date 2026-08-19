@@ -249,7 +249,7 @@
 
       .station-node {
         position: absolute;
-        width: 150px;
+        width: 180px;
         min-height: 115px;
         border-radius: 18px;
         border: 1px solid rgba(148,163,184,0.28);
@@ -272,7 +272,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 8px;
+        gap: 14px;
       }
 
       .station-title {
@@ -553,9 +553,12 @@
       }
 
       function addLog(message, type = "route") {
+        const now = new Date();
+        const pad = (value, length = 2) => String(value).padStart(length, "0");
+        const timestamp = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} | ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(now.getMilliseconds(), 3)}`;
         const item = document.createElement("li");
         item.className = `log-${type}`;
-        item.textContent = message;
+        item.textContent = `${timestamp} - ${message}`;
         eventLog.prepend(item);
         while (eventLog.children.length > 10) {
           eventLog.removeChild(eventLog.lastChild);
