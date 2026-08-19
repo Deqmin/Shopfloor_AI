@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shopfloor Production Control</title>
+    <style>
+      :root {
+        --bg: #08111d;
+        --panel: rgba(15, 23, 35, 0.86);
+        --panel-strong: rgba(11, 18, 29, 0.95);
+        --panel-soft: rgba(26, 39, 53, 0.9);
+        --line: rgba(148, 163, 184, 0.18);
+        --text: #e2edf9;
+        --muted: #a7b5ca;
+        --cyan: #52d3ff;
+        --blue: #5ea6ff;
+        --green: #6ee7b7;
+        --amber: #fbbf24;
+        --red: #fb7185;
+        --purple: #a78bfa;
+        --shadow: 0 20px 50px rgba(2, 6, 23, 0.55);
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background:
+          radial-gradient(circle at top left, rgba(82, 211, 255, 0.15), transparent 28%),
+          radial-gradient(circle at bottom right, rgba(167, 139, 250, 0.14), transparent 25%),
+          var(--bg);
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        color: var(--text);
+      }
+
+      body {
+        padding: 20px;
+      }
+
+      .app {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 18px;
+        min-height: calc(100vh - 40px);
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(16px);
+      }
+
+      .sidebar {
+        padding: 20px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .brand {
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: 1.4rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .brand span {
+        display: inline-block;
+        margin-top: 6px;
+        color: var(--cyan);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .station-list {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .station-editor {
+        background: rgba(15, 23, 35, 0.8);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px 12px 10px;
+      }
+
+      .station-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .station-header strong {
+        font-size: 0.96rem;
+      }
+
+      .status-pill {
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 700;
+        border: 1px solid transparent;
+      }
+
+      .status-process { background: rgba(94, 166, 255, 0.14); border-color: rgba(94,166,255,0.4); color: #bfe0ff; }
+      .status-inspection { background: rgba(251, 191, 36, 0.12); border-color: rgba(251,191,36,0.4); color: #fce69e; }
+      .status-repair { background: rgba(251, 113, 133, 0.12); border-color: rgba(251,113,133,0.35); color: #fecdd3; }
+      .status-source { background: rgba(110, 231, 183, 0.12); border-color: rgba(110,231,183,0.35); color: #bbf7d0; }
+      .status-sink { background: rgba(167, 139, 250, 0.12); border-color: rgba(167,139,250,0.35); color: #ddd6fe; }
+
+      .field-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 10px;
+      }
+
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        font-size: 0.71rem;
+        color: var(--muted);
+      }
+
+      input {
+        width: 100%;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: rgba(15, 23, 35, 0.9);
+        color: var(--text);
+        border-radius: 8px;
+        padding: 7px 8px;
+        outline: none;
+      }
+
+      .sidebar-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: auto;
+      }
+
+      button {
+        appearance: none;
+        border: none;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--blue), var(--cyan));
+        color: #06131d;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 10px 14px;
+        cursor: pointer;
+        box-shadow: 0 12px 24px rgba(82, 211, 255, 0.22);
+      }
+
+      .secondary {
+        background: rgba(148, 163, 184, 0.12);
+        color: var(--text);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        box-shadow: none;
+      }
+
+      .main {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        gap: 18px;
+        min-width: 0;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 18px 20px;
+      }
+
+      .title-block h2 {
+        margin: 0;
+        font-size: 1.15rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .sub {
+        color: var(--muted);
+        font-size: 0.75rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-top: 5px;
+      }
+
+      .status-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .chip {
+        border: 1px solid rgba(148,163,184,0.25);
+        background: rgba(15,23,35,0.7);
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 7px 10px;
+        font-size: 0.72rem;
+        font-weight: 600;
+      }
+
+      .chip strong {
+        color: var(--text);
+      }
+
+      .board {
+        position: relative;
+        min-height: 560px;
+        overflow: hidden;
+        padding: 18px;
+      }
+
+      .grid-bg {
+        position: absolute;
+        inset: 10px 12px 12px;
+        border-radius: 18px;
+        background:
+          linear-gradient(rgba(148,163,184,0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(148,163,184,0.04) 1px, transparent 1px),
+          radial-gradient(circle at center, rgba(82,211,255,.08), transparent 65%);
+        background-size: 32px 32px, 32px 32px, 100% 100%;
+        border: 1px solid rgba(148,163,184,0.12);
+        pointer-events: none;
+      }
+
+      .station-node {
+        position: absolute;
+        width: 150px;
+        min-height: 115px;
+        border-radius: 18px;
+        border: 1px solid rgba(148,163,184,0.28);
+        background: rgba(15,23,35,0.88);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 18px 30px rgba(0,0,0,0.16);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 12px 10px 10px;
+        transform: translate(-50%, -50%);
+        z-index: 3;
+      }
+
+      .station-node[data-role="source"] { border-color: rgba(110,231,183,0.5); }
+      .station-node[data-role="inspection"] { border-color: rgba(251,191,36,0.5); }
+      .station-node[data-role="repair"] { border-color: rgba(251,113,133,0.5); }
+      .station-node[data-role="sink"] { border-color: rgba(167,139,250,0.5); }
+
+      .station-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .station-name {
+        font-weight: 700;
+        font-size: 0.84rem;
+      }
+
+      .station-metric {
+        border-radius: 999px;
+        font-size: 0.63rem;
+        font-weight: 700;
+        background: rgba(82, 211, 255, 0.12);
+        color: var(--cyan);
+        padding: 5px 7px;
+      }
+
+      .station-queue {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        min-height: 24px;
+      }
+
+      .queue-pill {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, rgba(94,166,255,0.8), rgba(82,211,255,0.8));
+        box-shadow: 0 0 18px rgba(82,211,255,0.3);
+      }
+
+      .queue-pill.fail { background: linear-gradient(135deg, rgba(251,113,133,0.8), rgba(251,191,36,0.75)); }
+      .queue-pill.repair { background: linear-gradient(135deg, rgba(251,113,133,0.85), rgba(239,68,68,0.8)); }
+      .queue-pill.ok { background: linear-gradient(135deg, rgba(110,231,183,0.85), rgba(82,211,255,0.8)); }
+
+      .station-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 0.66rem;
+      }
+
+      .station-legend {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+
+      .route {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+      }
+
+      .route-line {
+        position: absolute;
+        height: 3px;
+        background: linear-gradient(90deg, rgba(82,211,255,0.2), rgba(82,211,255,0.8), rgba(110,231,183,0.4));
+        border-radius: 999px;
+        box-shadow: 0 0 18px rgba(82,211,255,0.22);
+        transform-origin: left center;
+      }
+
+      .route-line.fail {
+        background: linear-gradient(90deg, rgba(251,113,133,0.2), rgba(251,113,133,0.9), rgba(251,191,36,0.3));
+      }
+
+      .unit-layer {
+        position: absolute;
+        inset: 0;
+        z-index: 5;
+        pointer-events: none;
+      }
+
+      .unit {
+        position: absolute;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 2px solid rgba(255,255,255,0.7);
+        background: linear-gradient(135deg, var(--cyan), var(--blue));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.58rem;
+        font-weight: 800;
+        color: #051a28;
+        box-shadow: 0 0 20px rgba(82,211,255,0.36);
+        transform: translate(-50%, -50%);
+        transition: box-shadow 0.2s ease;
+      }
+
+      .unit.failed {
+        background: linear-gradient(135deg, #fecdd3, var(--red));
+        box-shadow: 0 0 20px rgba(251,113,133,0.38);
+      }
+
+      .unit.repair {
+        background: linear-gradient(135deg, #fcd34d, #fb7185);
+        box-shadow: 0 0 20px rgba(251,113,133,0.38);
+      }
+
+      .unit.complete {
+        background: linear-gradient(135deg, #a7f3d0, var(--green));
+        box-shadow: 0 0 20px rgba(110,231,183,0.38);
+      }
+
+      .log-panel {
+        padding: 14px 18px 18px;
+      }
+
+      .log-panel h3 {
+        margin: 0 0 12px;
+        font-size: 0.82rem;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+
+      .log-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 140px;
+        overflow: auto;
+      }
+
+      .log-list li {
+        border-radius: 10px;
+        padding: 8px 10px;
+        background: rgba(15, 23, 35, 0.8);
+        border: 1px solid rgba(148,163,184,0.16);
+        color: var(--muted);
+        font-size: 0.74rem;
+      }
+
+      .log-plus { color: var(--green); }
+      .log-alert { color: var(--amber); }
+      .log-fail { color: var(--red); }
+      .log-route { color: var(--cyan); }
+
+      @media (max-width: 980px) {
+        .app {
+          grid-template-columns: 1fr;
+        }
+
+        .board {
+          min-height: 620px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar panel">
+        <div class="brand">
+          <h1>Shopfloor</h1>
+          <span>Production Cell</span>
+        </div>
+
+        <div class="station-list" id="stationConfigList"></div>
+
+        <div class="sidebar-actions">
+          <button id="toggleSim">Start</button>
+          <button id="resetSim" class="secondary">Reset</button>
+        </div>
+      </aside>
+
+      <div class="main">
+        <header class="topbar panel">
+          <div class="title-block">
+            <h2>Live Routing Board</h2>
+            <div class="sub">Manufacturing flow / inline QC / repair loop</div>
+          </div>
+
+          <div class="status-row">
+            <div class="chip">Units In <strong id="kpiIn">0</strong></div>
+            <div class="chip">WIP <strong id="kpiWip">0</strong></div>
+            <div class="chip">Completed <strong id="kpiDone">0</strong></div>
+            <div class="chip">Failures <strong id="kpiFail">0</strong></div>
+          </div>
+        </header>
+
+        <section class="board panel">
+          <div class="grid-bg"></div>
+          <div class="route" id="routeLayer"></div>
+          <div class="unit-layer" id="unitLayer"></div>
+          <div id="stationLayer"></div>
+        </section>
+
+        <section class="log-panel panel">
+          <h3>Workflow Events</h3>
+          <ul class="log-list" id="eventLog"></ul>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const DEFAULT_STATIONS = [
+        { id: "UNIT CREATION", name: "UNIT CREATION", role: "source", next: "laser", processTime: 0.8, failRate: 0 },
+        { id: "laser", name: "Laser Cut", role: "process", next: "drill", processTime: 2.1, failRate: 0 },
+        { id: "drill", name: "Drill", role: "process", next: "inspect", processTime: 2.5, failRate: 0 },
+        { id: "inspect", name: "Vision QA", role: "inspection", next: "assembly", repairTo: "repair", processTime: 1.6, failRate: 0.18 },
+        { id: "repair", name: "Repair Cell", role: "repair", next: "inspect", processTime: 2.6, failRate: 0 },
+        { id: "assembly", name: "Assembly", role: "process", next: "finalqc", processTime: 3.0, failRate: 0 },
+        { id: "finalqc", name: "Final QC", role: "inspection", next: "dispatch", repairTo: "repair", processTime: 1.9, failRate: 0.12 },
+        { id: "dispatch", name: "Dispatch", role: "sink", next: null, processTime: 0.9, failRate: 0 }
+      ];
+
+      const state = {
+        stations: [],
+        queue: [],
+        running: false,
+        tick: 0,
+        wip: 0,
+        totalIn: 0,
+        totalDone: 0,
+        totalFail: 0,
+        totalRework: 0,
+        circuitMap: {},
+        units: new Map(),
+        nextUnitId: 1,
+        lastSnapshotTime: performance.now(),
+      };
+
+      const stationLayer = document.getElementById("stationLayer");
+      const routeLayer = document.getElementById("routeLayer");
+      const unitLayer = document.getElementById("unitLayer");
+      const stationConfigList = document.getElementById("stationConfigList");
+      const eventLog = document.getElementById("eventLog");
+
+      function cloneStations() {
+        return DEFAULT_STATIONS.map((st) => ({
+          ...st,
+          queue: [],
+          active: null,
+          activeStartedAt: null,
+          completed: 0,
+          failed: 0,
+          inflight: []
+        }));
+      }
+
+      function addLog(message, type = "route") {
+        const item = document.createElement("li");
+        item.className = `log-${type}`;
+        item.textContent = message;
+        eventLog.prepend(item);
+        while (eventLog.children.length > 10) {
+          eventLog.removeChild(eventLog.lastChild);
+        }
+      }
+
+      function createStationEditors() {
+        stationConfigList.innerHTML = "";
+        state.stations.forEach((station) => {
+          const block = document.createElement("div");
+          block.className = "station-editor";
+          block.innerHTML = `
+            <div class="station-header">
+              <strong>${station.name}</strong>
+              <span class="status-pill status-${station.role}">${station.role}</span>
+            </div>
+            <div class="field-grid">
+              <label>
+                Process (s)
+                <input data-station="${station.id}" data-field="processTime" type="number" min="0.2" max="30" step="0.1" value="${station.processTime}" />
+              </label>
+              <label>
+                Fail Rate
+                <input data-station="${station.id}" data-field="failRate" type="number" min="0" max="1" step="0.01" value="${station.failRate}" />
+              </label>
+            </div>
+          `;
+          stationConfigList.appendChild(block);
+        });
+      }
+
+      function setStationNodePositions() {
+        const board = document.querySelector(".board");
+        const rect = board.getBoundingClientRect();
+        const availableWidth = rect.width - 90;
+        const stationCount = state.stations.length;
+        const centerY = rect.height / 2;
+        const stepX = Math.min((availableWidth - 80) / (stationCount - 1), 210);
+
+        state.stations.forEach((station, index) => {
+          const x = 120 + index * stepX;
+          const y = centerY + (index % 2 === 0 ? 0 : 38);
+          station.x = x;
+          station.y = y;
+        });
+      }
+
+      function renderRoutes() {
+        routeLayer.innerHTML = "";
+        for (let i = 0; i < state.stations.length - 1; i++) {
+          const from = state.stations[i];
+          const to = state.stations[i + 1];
+          const line = document.createElement("div");
+          line.className = "route-line";
+          const dx = to.x - from.x;
+          const dy = to.y - from.y;
+          const length = Math.hypot(dx, dy);
+          const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+          const left = from.x;
+          const top = from.y;
+          line.style.width = `${length}px`;
+          line.style.left = `${left}px`;
+          line.style.top = `${top}px`;
+          line.style.transform = `rotate(${angle}deg)`;
+          routeLayer.appendChild(line);
+        }
+
+        state.stations.forEach((station) => {
+          if (station.role === "inspection" || station.role === "repair") {
+            const fail = station.repairTo ? state.stations.find((s) => s.id === station.repairTo) : null;
+            if (!fail) return;
+            const from = station;
+            const to = fail;
+            const line = document.createElement("div");
+            line.className = "route-line fail";
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const length = Math.hypot(dx, dy);
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            line.style.width = `${length * 0.8}px`;
+            line.style.left = `${from.x + 30}px`;
+            line.style.top = `${from.y + 18}px`;
+            line.style.transform = `rotate(${angle}deg)`;
+            routeLayer.appendChild(line);
+          }
+        });
+      }
+
+      function renderStations() {
+        stationLayer.innerHTML = "";
+        state.stations.forEach((station) => {
+          const node = document.createElement("div");
+          node.className = "station-node";
+          node.dataset.role = station.role;
+          node.style.left = `${station.x}px`;
+          node.style.top = `${station.y}px`;
+          node.innerHTML = `
+            <div class="station-head">
+              <div class="station-name">${station.name}</div>
+              <div class="station-metric">${station.queue.length + (station.active ? 1 : 0)}</div>
+            </div>
+            <div class="station-queue" id="queue-${station.id}"></div>
+            <div class="station-meta">
+              <span class="station-legend"><span class="dot" style="background:${getRoleColor(station.role)}"></span>${station.role}</span>
+              <span>${station.processTime.toFixed(1)}s</span>
+            </div>
+          `;
+          stationLayer.appendChild(node);
+          const q = document.getElementById(`queue-${station.id}`);
+          for (let i = 0; i < Math.min(6, station.queue.length + (station.active ? 1 : 0)); i++) {
+            const pill = document.createElement("span");
+            pill.className = `queue-pill ${station.role === "repair" ? "repair" : i === 0 && station.active ? "ok" : "ok"}`;
+            q.appendChild(pill);
+          }
+        });
+      }
+
+      function getRoleColor(role) {
+        if (role === "source") return "#6ee7b7";
+        if (role === "inspection") return "#fbbf24";
+        if (role === "repair") return "#fb7185";
+        if (role === "sink") return "#a78bfa";
+        return "#5ea6ff";
+      }
+
+      function updateKpis() {
+        document.getElementById("kpiIn").textContent = state.totalIn;
+        document.getElementById("kpiWip").textContent = state.wip;
+        document.getElementById("kpiDone").textContent = state.totalDone;
+        document.getElementById("kpiFail").textContent = state.totalFail;
+      }
+
+      function nextStationFor(station, unit) {
+        if (station.role === "source") return station.next;
+        if (station.role === "inspection" && Math.random() < station.failRate) {
+          unit.status = "failed";
+          state.totalFail += 1;
+          state.totalRework += 1;
+          addLog(`Inspection failed at ${station.name}; unit ${unit.id} routed to Repair`, "fail");
+          return station.repairTo || station.next;
+        }
+        if (station.role === "repair") {
+          unit.status = "repaired";
+          addLog(`Repair completed for unit ${unit.id}; returning to ${station.next}`, "route");
+          return station.next;
+        }
+        if (station.role === "sink") {
+          unit.status = "complete";
+          state.totalDone += 1;
+          state.wip = Math.max(0, state.wip - 1);
+          addLog(`Dispatch complete: unit ${unit.id} shipped`, "plus");
+          return null;
+        }
+        return station.next;
+      }
+
+      function findStation(id) {
+        return state.stations.find((station) => station.id === id);
+      }
+
+      function createUnit(id, status = "ok") {
+        const unit = document.createElement("div");
+        unit.className = `unit ${status}`;
+        unit.textContent = id;
+        unitLayer.appendChild(unit);
+        return unit;
+      }
+
+      function removeUnitFromBoard(unitRef) {
+        if (unitRef && unitRef.parentNode) {
+          unitRef.parentNode.removeChild(unitRef);
+        }
+      }
+
+      function animateUnit(unitData, fromStation, toStation) {
+        const unitEl = createUnit(unitData.id, unitData.status);
+        const startX = fromStation ? fromStation.x : 100;
+        const startY = fromStation ? fromStation.y : 200;
+        const endX = toStation ? toStation.x : 1100;
+        const endY = toStation ? toStation.y : 200;
+
+        unitEl.style.left = `${startX}px`;
+        unitEl.style.top = `${startY}px`;
+
+        const duration = 1000;
+        const start = performance.now();
+        const step = (now) => {
+          const t = Math.min(1, (now - start) / duration);
+          const eased = 1 - Math.pow(1 - t, 3);
+          const x = startX + (endX - startX) * eased;
+          const y = startY + (endY - startY) * eased;
+          unitEl.style.left = `${x}px`;
+          unitEl.style.top = `${y}px`;
+          if (t < 1) {
+            requestAnimationFrame(step);
+          } else {
+            removeUnitFromBoard(unitEl);
+          }
+        };
+
+        requestAnimationFrame(step);
+      }
+
+      function pushToStation(stationId, unitRef, fromStationId = null) {
+        const station = findStation(stationId);
+        if (!station) return;
+        station.queue.push(unitRef);
+        if (fromStationId) {
+          addLog(`Unit ${unitRef.id} moved from ${fromStationId} to ${station.name}`, "route");
+        }
+        renderStations();
+      }
+
+      function processStation(station) {
+        if (!station) return;
+        if (station.active) {
+          const elapsed = (performance.now() - station.activeStartedAt) / 1000;
+          if (elapsed >= station.processTime) {
+            const unit = station.active;
+            const nextId = nextStationFor(station, unit);
+            station.active = null;
+            station.activeStartedAt = null;
+            if (nextId === null) {
+              removeUnitFromBoard(unit.domElement);
+              unit.domElement = null;
+              return;
+            }
+            if (nextId) {
+              const nextStation = findStation(nextId);
+              if (nextStation) {
+                const from = station;
+                const to = nextStation;
+                const travel = { id: unit.id, status: unit.status };
+                animateUnit(travel, from, to);
+                nextStation.queue.push({ id: unit.id, status: unit.status });
+                addLog(`Unit ${unit.id} routed ${station.name} → ${nextStation.name}`, "route");
+                renderStations();
+              }
+            }
+          }
+          return;
+        }
+
+        if (station.queue.length > 0) {
+          const unit = station.queue.shift();
+          station.active = unit;
+          station.activeStartedAt = performance.now();
+          unit.status = unit.status || "ok";
+          const unitEl = createUnit(unit.id, unit.status);
+          const center = station;
+          unitEl.style.left = `${center.x}px`;
+          unitEl.style.top = `${center.y}px`;
+          unit.domElement = unitEl;
+          if (station.role === "source") {
+            unit.status = "ok";
+            addLog(`Unit ${unit.id} started in ${station.name}`, "plus");
+          }
+          renderStations();
+        }
+      }
+
+      function generateUnit() {
+        const source = findStation("UNIT CREATION");
+        if (!source) return;
+        const payload = {
+          id: state.nextUnitId++,
+          status: "ok",
+          domElement: null,
+          currentStation: "UNIT CREATION"
+        };
+        state.totalIn += 1;
+        state.wip += 1;
+        source.queue.push(payload);
+        addLog(`New unit ${payload.id} entered UNIT CREATION`, "plus");
+        updateKpis();
+      }
+
+      function resetSimulation() {
+        state.stations = cloneStations();
+        state.queue = [];
+        state.running = false;
+        state.wip = 0;
+        state.totalIn = 0;
+        state.totalDone = 0;
+        state.totalFail = 0;
+        state.totalRework = 0;
+        state.nextUnitId = 1;
+        eventLog.innerHTML = "";
+        unitLayer.innerHTML = "";
+        document.getElementById("toggleSim").textContent = "Start";
+        state.stations.forEach((station) => {
+          if (station.role === "source") {
+            station.queue = [];
+          }
+        });
+        createStationEditors();
+        setStationNodePositions();
+        renderRoutes();
+        renderStations();
+        updateKpis();
+      }
+
+      function syncStationControls() {
+        document.querySelectorAll("[data-field]").forEach((input) => {
+          input.addEventListener("input", (event) => {
+            const stationId = event.target.dataset.station;
+            const field = event.target.dataset.field;
+            const station = findStation(stationId);
+            if (!station) return;
+            const value = Number(event.target.value);
+            station[field] = field === "failRate" ? Math.min(1, Math.max(0, value)) : Math.max(0.2, value);
+            if (field === "processTime") {
+              station.processTime = Number(event.target.value);
+            }
+            renderStations();
+          });
+        });
+      }
+
+      function stepSimulation() {
+        if (!state.running) return;
+        const source = findStation("UNIT CREATION");
+        const sourceRate = source ? Math.max(0.7, source.processTime) : 1;
+        if (state.tick % Math.max(1, Math.round(sourceRate * 60)) === 0) {
+          generateUnit();
+        }
+
+        state.stations.forEach((station) => processStation(station));
+        renderStations();
+        state.tick += 1;
+      }
+
+      function startSimulation() {
+        state.running = !state.running;
+        document.getElementById("toggleSim").textContent = state.running ? "Pause" : "Start";
+        if (state.running) {
+          addLog("Simulation started", "route");
+        }
+      }
+
+      document.getElementById("toggleSim").addEventListener("click", startSimulation);
+      document.getElementById("resetSim").addEventListener("click", resetSimulation);
+
+      resetSimulation();
+      syncStationControls();
+      setInterval(stepSimulation, 500);
+
+      window.addEventListener("resize", () => {
+        setStationNodePositions();
+        renderRoutes();
+        renderStations();
+      });
+    </script>
+  </body>
+</html>
