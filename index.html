@@ -272,9 +272,30 @@
         gap: 8px;
       }
 
+      .station-title {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+      }
+
+      .station-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        flex: 0 0 22px;
+        border-radius: 7px;
+        background: rgba(82, 211, 255, 0.12);
+        color: var(--cyan);
+        font-size: 0.9rem;
+      }
+
       .station-name {
         font-weight: 700;
         font-size: 0.84rem;
+        min-width: 0;
       }
 
       .station-metric {
@@ -482,14 +503,13 @@
 
     <script>
       const DEFAULT_STATIONS = [
-        { id: "UNIT CREATION", name: "UNIT CREATION", role: "source", next: "laser", processTime: 0.8, failRate: 0 },
-        { id: "laser", name: "Laser Cut", role: "process", next: "drill", processTime: 2.1, failRate: 0 },
-        { id: "drill", name: "Drill", role: "process", next: "inspect", processTime: 2.5, failRate: 0 },
-        { id: "inspect", name: "Vision QA", role: "inspection", next: "assembly", repairTo: "repair", processTime: 1.6, failRate: 0.18 },
-        { id: "repair", name: "Repair Cell", role: "repair", next: "inspect", processTime: 2.6, failRate: 0 },
-        { id: "assembly", name: "Assembly", role: "process", next: "finalqc", processTime: 3.0, failRate: 0 },
-        { id: "finalqc", name: "Final QC", role: "inspection", next: "dispatch", repairTo: "repair", processTime: 1.9, failRate: 0.12 },
-        { id: "dispatch", name: "Dispatch", role: "sink", next: null, processTime: 0.9, failRate: 0 }
+        { id: "UNIT CREATION", name: "UNIT CREATION", role: "source", next: "CHECKPOINT", processTime: 0.8, failRate: 0 },
+        { id: "CHECKPOINT", name: "CHECKPOINT", role: "process", next: "MANUAL TEST", processTime: 2.1, failRate: 0 },
+        { id: "MANUAL TEST", name: "MANUAL TEST", role: "inspection", next: "PACKAGE", repairTo: "REPAIR", processTime: 1.6, failRate: 0.18 },
+        { id: "REPAIR", name: "REPAIR", role: "repair", next: "MANUAL TEST", processTime: 2.6, failRate: 0 },
+        { id: "PACKAGE", name: "PACKAGE", role: "process", next: "PALLET", processTime: 3.0, failRate: 0 },
+        { id: "PALLET", name: "PALLET", role: "process", next: "SHIPMENT", processTime: 0.9, failRate: 0 },
+        { id: "SHIPMENT", name: "SHIPMENT", role: "sink", next: null, processTime: 0.9, failRate: 0 }
       ];
 
       const state = {
@@ -543,7 +563,7 @@
           block.className = "station-editor";
           block.innerHTML = `
             <div class="station-header">
-              <strong>${station.name}</strong>
+              <strong class="station-title"><span class="station-icon" aria-hidden="true">${getStationIcon(station.id)}</span>${station.name}</strong>
               <span class="status-pill status-${station.role}">${station.role}</span>
             </div>
             <div class="field-grid">
@@ -565,23 +585,30 @@
         const board = document.querySelector(".board");
         const rect = board.getBoundingClientRect();
         const availableWidth = rect.width - 90;
-        const stationCount = state.stations.length;
         const centerY = rect.height / 2;
-        const stepX = Math.min((availableWidth - 80) / (stationCount - 1), 210);
+        const mainStations = state.stations.filter((station) => station.role !== "repair");
+        const stepX = Math.min((availableWidth - 80) / (mainStations.length - 1), 210);
 
-        state.stations.forEach((station, index) => {
+        mainStations.forEach((station, index) => {
           const x = 120 + index * stepX;
-          const y = centerY + (index % 2 === 0 ? 0 : 38);
+          const y = centerY;
           station.x = x;
           station.y = y;
         });
+
+        const manualTest = state.stations.find((station) => station.id === "MANUAL TEST");
+        const repair = state.stations.find((station) => station.role === "repair");
+        if (manualTest && repair) {
+          repair.x = manualTest.x;
+          repair.y = manualTest.y + 150;
+        }
       }
 
       function renderRoutes() {
         routeLayer.innerHTML = "";
-        for (let i = 0; i < state.stations.length - 1; i++) {
-          const from = state.stations[i];
-          const to = state.stations[i + 1];
+        state.stations.forEach((from) => {
+          const to = from.next ? state.stations.find((station) => station.id === from.next) : null;
+          if (!to) return;
           const line = document.createElement("div");
           line.className = "route-line";
           const dx = to.x - from.x;
@@ -595,7 +622,7 @@
           line.style.top = `${top}px`;
           line.style.transform = `rotate(${angle}deg)`;
           routeLayer.appendChild(line);
-        }
+        });
 
         state.stations.forEach((station) => {
           if (station.role === "inspection" || station.role === "repair") {
@@ -628,7 +655,7 @@
           node.style.top = `${station.y}px`;
           node.innerHTML = `
             <div class="station-head">
-              <div class="station-name">${station.name}</div>
+              <div class="station-title"><span class="station-icon" aria-hidden="true">${getStationIcon(station.id)}</span><div class="station-name">${station.name}</div></div>
               <div class="station-metric">${station.queue.length + (station.active ? 1 : 0)}</div>
             </div>
             <div class="station-queue" id="queue-${station.id}"></div>
@@ -639,12 +666,27 @@
           `;
           stationLayer.appendChild(node);
           const q = document.getElementById(`queue-${station.id}`);
-          for (let i = 0; i < Math.min(6, station.queue.length + (station.active ? 1 : 0)); i++) {
+          const visibleUnits = station.active ? [station.active, ...station.queue] : station.queue;
+          for (let i = 0; i < Math.min(6, visibleUnits.length); i++) {
             const pill = document.createElement("span");
-            pill.className = `queue-pill ${station.role === "repair" ? "repair" : i === 0 && station.active ? "ok" : "ok"}`;
+            const status = visibleUnits[i].status;
+            pill.className = `queue-pill ${status === "failed" ? "fail" : status === "repaired" ? "repair" : "ok"}`;
             q.appendChild(pill);
           }
         });
+      }
+
+      function getStationIcon(stationId) {
+        const icons = {
+          "UNIT CREATION": "&#9881;",
+          CHECKPOINT: "&#10003;",
+          "MANUAL TEST": "&#128187;",
+          REPAIR: "&#128295;",
+          PACKAGE: "&#128230;",
+          PALLET: "&#9638;",
+          SHIPMENT: "&#128666;"
+        };
+        return icons[stationId] || "&#9679;";
       }
 
       function getRoleColor(role) {
@@ -671,6 +713,10 @@
           addLog(`Inspection failed at ${station.name}; unit ${unit.id} routed to Repair`, "fail");
           return station.repairTo || station.next;
         }
+        if (station.role === "inspection") {
+          unit.status = "passed";
+          addLog(`Inspection passed at ${station.name}; unit ${unit.id} continued`, "plus");
+        }
         if (station.role === "repair") {
           unit.status = "repaired";
           addLog(`Repair completed for unit ${unit.id}; returning to ${station.next}`, "route");
@@ -680,7 +726,7 @@
           unit.status = "complete";
           state.totalDone += 1;
           state.wip = Math.max(0, state.wip - 1);
-          addLog(`Dispatch complete: unit ${unit.id} shipped`, "plus");
+          addLog(`Shipment complete: unit ${unit.id} shipped`, "plus");
           return null;
         }
         return station.next;
